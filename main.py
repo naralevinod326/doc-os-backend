@@ -5,6 +5,8 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 import nest_asyncio
 from pyngrok import ngrok
+from pdf2image import convert_from_bytes
+import uuid
 
 app = FastAPI(title="DocOS Backend Engine")
 
@@ -19,45 +21,60 @@ app.add_middleware(
 
 # Google Drive path where we will save images (Colab environment)
 DRIVE_OUTPUT_DIR = "/content/drive/MyDrive/DocOS_Outputs"
-
-# Create the folder if it doesn't exist (this works when running in Colab)
 os.makedirs(DRIVE_OUTPUT_DIR, exist_ok=True)
-
-# Mount the static directory so frontend can fetch images
 app.mount("/outputs", StaticFiles(directory=DRIVE_OUTPUT_DIR), name="outputs")
-
 
 @app.get("/")
 def read_root():
     return {"message": "DocOS Backend is running successfully!"}
 
-
 @app.post("/process-pdf")
 async def process_pdf(file: UploadFile = File(...)):
     """
-    Placeholder endpoint for Phase 1. 
-    We will add Qwen3-VL and Layout Detection here later.
+    Step 2: PDF Rasterization & Basic Image saving.
+    We convert the PDF to an image and save it to Google Drive.
     """
-    # 1. Read PDF
+    print(f"Receiving file: {file.filename}")
     content = await file.read()
     
-    # Placeholder: We pretend we processed it and cropped an image
-    # For now, just returning a fake Scene Graph JSON
-    fake_scene_graph = {
+    # 1. Convert first page of PDF to Image (Rasterization)
+    images = convert_from_bytes(content, first_page=1, last_page=1)
+    page_image = images[0]
+    
+    # 2. Save the image to Google Drive
+    image_id = str(uuid.uuid4())[:8]
+    image_filename = f"page_1_{image_id}.png"
+    image_path = os.path.join(DRIVE_OUTPUT_DIR, image_filename)
+    page_image.save(image_path, "PNG")
+    
+    # URL to access this image via our FastAPI server
+    image_url = f"/outputs/{image_filename}"
+    
+    # 3. Create a dynamic Scene Graph
+    scene_graph = {
         "page": 1,
         "filename": file.filename,
+        "width": page_image.width,
+        "height": page_image.height,
         "elements": [
             {
-                "id": "txt_1",
+                "id": f"bg_{image_id}",
+                "type": "background_image",
+                "src_url": image_url,
+                "bbox": [0, 0, page_image.width, page_image.height],
+                "editable": False
+            },
+            {
+                "id": "txt_example",
                 "type": "text",
-                "content": "This is where AI extracted text will go.",
-                "bbox": [10, 10, 200, 50],
+                "content": "AI text extraction will replace this soon!",
+                "bbox": [100, 100, 400, 200],
                 "editable": True
             }
         ]
     }
     
-    return {"status": "success", "scene_graph": fake_scene_graph}
+    return {"status": "success", "scene_graph": scene_graph}
 
 
 if __name__ == "__main__":
