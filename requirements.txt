@@ -1,0 +1,8 @@
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+pyngrok==7.0.1
+nest-asyncio==1.5.8
+pdf2image==1.16.3
+Pillow==10.0.1
+# Vision Models and OCR dependencies will be installed directly in Colab
